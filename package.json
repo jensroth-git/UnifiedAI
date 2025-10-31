@@ -1,0 +1,62 @@
+{
+  "name": "unified-ai",
+  "version": "1.0.0",
+  "description": "A unified interface for interacting with multiple AI providers (OpenAI, Claude, Google Gemini) with consistent message handling and tool calling support",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm run build",
+    "dev": "tsx examples.ts",
+    "dev:debug": "ts-node examples.ts",
+    "example": "tsx examples.ts"
+  },
+  "keywords": [
+    "ai",
+    "openai",
+    "claude",
+    "anthropic",
+    "gemini",
+    "google-ai",
+    "llm",
+    "chatgpt",
+    "unified-interface",
+    "ai-providers",
+    "tool-calling",
+    "function-calling",
+    "typescript"
+  ],
+  "author": "Jens Roth",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/UnifiedAI.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/UnifiedAI/issues"
+  },
+  "homepage": "https://github.com/yourusername/UnifiedAI#readme",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.56.0",
+    "@google/genai": "^1.10.0",
+    "dotenv": "^17.2.3",
+    "openai": "^5.10.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
