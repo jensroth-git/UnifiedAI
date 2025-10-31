@@ -31,12 +31,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/UnifiedAI.git"
+    "url": "https://github.com/jensroth-git/UnifiedAI.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/UnifiedAI/issues"
+    "url": "https://github.com/jensroth-git/UnifiedAI/issues"
   },
-  "homepage": "https://github.com/yourusername/UnifiedAI#readme",
+  "homepage": "https://github.com/jensroth-git/UnifiedAI#readme",
   "files": [
     "dist",
     "README.md",

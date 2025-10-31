@@ -15,7 +15,7 @@ A unified interface for interacting with multiple AI providers (OpenAI, Claude, 
 ## Installation
 
 ```bash
-npm install unified-ai zod
+npm install unified-ai
 ```
 
 You'll also need to install the SDK for the provider(s) you plan to use:
