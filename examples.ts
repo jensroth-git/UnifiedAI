@@ -312,9 +312,9 @@ async function main() {
   try {
     // Create model (choose your provider)
     // OpenAI example
-    // const createModel =
-    //     createOpenAIProvider({apiKey: process.env.OPENAI_API_KEY});
-    // const model = createModel('gpt-4.1');
+    const createModel =
+        createOpenAIProvider({apiKey: process.env.OPENAI_API_KEY});
+    const model = createModel("gpt-5.1");
 
     // Claude example
     // const createModel = createClaudeProvider({apiKey:
@@ -322,8 +322,8 @@ async function main() {
     // createModel('claude-sonnet-4-5-20250929');
 
     // Google example
-    const createModel = createGoogleProvider(process.env.GOOGLE_API_KEY!);
-    const model = createModel('gemini-3-pro-preview');
+    // const createModel = createGoogleProvider(process.env.GOOGLE_API_KEY!);
+    // const model = createModel('gemini-3-pro-preview');
 
     // Uncomment the examples you want to run
     // await basicExample(model);

@@ -745,7 +745,8 @@ export class ClaudeModel extends BaseModel {
                 if(typeof addedMessages[addedMessages.length - 1].content === "string") {
                     text = addedMessages[addedMessages.length - 1].content;
                 } else if (Array.isArray(addedMessages[addedMessages.length - 1].content)) {
-                    text = (addedMessages[addedMessages.length - 1].content as Anthropic.Messages.ContentBlock[]).find((content: Anthropic.Messages.ContentBlock) => content.type === "text")?.text || "";
+                    text = ((addedMessages[addedMessages.length - 1].content as Anthropic.Messages.ContentBlock[])
+                    .find((content: Anthropic.Messages.ContentBlock) => content.type === "text") as Anthropic.Messages.TextBlockParam).text || "";
                 }
             }
 
