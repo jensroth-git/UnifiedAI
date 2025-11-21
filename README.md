@@ -7,7 +7,7 @@ A unified interface for interacting with multiple AI providers (OpenAI, Claude, 
 - 🔄 **Unified API** - Single interface works across OpenAI, Claude, and Google Gemini
 - 🛠️ **Tool Calling** - Consistent tool/function calling support with Zod schema validation
 - 📝 **Type-Safe** - Full TypeScript support with comprehensive type definitions
-- 🖼️ **Multimodal** - Support for text, images, and audio inputs
+- 🖼️ **Multimodal** - Support for text, images, audio, and video inputs
 - 🔁 **Tool Roundtrips** - Automatic handling of multi-turn tool calling conversations
 - ⚡ **Rate Limiting** - Built-in rate limit handling for Claude API
 - 🎯 **Stop Signals** - Graceful interruption of generation processes
@@ -206,6 +206,48 @@ const result = await generateText({
 });
 ```
 
+### Video (Google Gemini)
+
+```typescript
+import fs from 'fs';
+
+// Read video file and convert to base64
+const videoBuffer = fs.readFileSync('path/to/video.mp4');
+const videoBase64 = videoBuffer.toString('base64');
+
+const result = await generateText({
+  model,
+  messages: [
+    {
+      role: 'user',
+      content: [
+        {
+          type: 'video_url',
+          video_url: {
+            mime_type: 'video/mp4',
+            data: videoBase64
+          }
+        }
+      ]
+    },
+    { role: 'user', text: 'What is happening in this video?' }
+  ]
+});
+```
+
+**Supported video formats:**
+- video/mp4
+- video/mpeg
+- video/mov
+- video/avi
+- video/x-flv
+- video/mpg
+- video/webm
+- video/wmv
+- video/3gpp
+
+**Note:** Video analysis requires a Gemini model that supports video input (e.g., `gemini-1.5-pro`, `gemini-2.5-pro`, `gemini-2.5-flash`).
+
 ## Advanced Features
 
 ### Stop Signals
@@ -290,6 +332,15 @@ The library supports various message types:
   content: [{
     type: 'audio_url',
     audio_url: { mime_type: 'audio/mp3', data: '...' }
+  }]
+}
+
+// Video message (Google only)
+{
+  role: 'user',
+  content: [{
+    type: 'video_url',
+    video_url: { mime_type: 'video/mp4', data: '...' }
   }]
 }
 

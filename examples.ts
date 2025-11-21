@@ -8,7 +8,7 @@ import 'dotenv/config';
 
 import {z} from 'zod';
 
-import {BaseImageMessage, BaseMessage, BaseModel, BaseTool, createClaudeProvider, createGoogleProvider, createOpenAIProvider, generateText, Signal} from './index';
+import {BaseImageMessage, BaseMessage, BaseModel, BaseTool, BaseVideoMessage, createClaudeProvider, createGoogleProvider, createOpenAIProvider, generateText, Signal} from './index';
 
 // ============================================
 // Example 1: Basic Text Generation
@@ -123,7 +123,45 @@ async function imageAnalysisExample(model: BaseModel) {
 }
 
 // ============================================
-// Example 4: Conversation with Stop Signal
+// Example 4: Video Analysis (Google Gemini only)
+// ============================================
+
+async function videoAnalysisExample(model: BaseModel) {
+  console.log('\n=== Video Analysis (Google Gemini) ===\n');
+
+  // Example: Read video file and convert to base64
+  // In real usage, you would use fs.readFileSync to read the video file
+  // const videoBuffer = fs.readFileSync('path/to/video.mp4');
+  // const videoBase64 = videoBuffer.toString('base64');
+
+  // For demonstration, using a placeholder
+  // In practice, replace this with actual video data
+  const videoBase64 = 'REPLACE_WITH_ACTUAL_VIDEO_BASE64_DATA';
+
+  const videoMessage: BaseVideoMessage = {
+    role: 'user',
+    content: [{
+      type: 'video_url',
+      video_url: {
+        mime_type: 'video/mp4',
+        data: videoBase64
+      }
+    }]
+  };
+
+  const result = await generateText({
+    model,
+    messages: [
+      videoMessage,
+      {role: 'user', text: 'What is happening in this video? Describe the main actions and objects.'}
+    ]
+  });
+
+  console.log('Video analysis:', result.text);
+}
+
+// ============================================
+// Example 5: Conversation with Stop Signal
 // ============================================
 
 async function stopSignalExample(model: BaseModel) {
@@ -148,7 +186,7 @@ async function stopSignalExample(model: BaseModel) {
 }
 
 // ============================================
-// Example 5: Streaming Text Callback
+// Example 6: Streaming Text Callback
 // ============================================
 
 async function streamingExample(model: BaseModel) {
@@ -164,7 +202,7 @@ async function streamingExample(model: BaseModel) {
 }
 
 // ============================================
-// Example 6: Complex Tool with Force Stop
+// Example 7: Complex Tool with Force Stop
 // ============================================
 
 async function forceStopToolExample(model: BaseModel) {
@@ -219,7 +257,7 @@ async function forceStopToolExample(model: BaseModel) {
 }
 
 // ============================================
-// Example 7: Conversation History
+// Example 8: Conversation History
 // ============================================
 
 async function conversationHistoryExample(model: BaseModel) {
@@ -274,9 +312,9 @@ async function main() {
   try {
     // Create model (choose your provider)
     // OpenAI example
-    const createModel =
-        createOpenAIProvider({apiKey: process.env.OPENAI_API_KEY});
-    const model = createModel('gpt-4.1');
+    // const createModel =
+    //     createOpenAIProvider({apiKey: process.env.OPENAI_API_KEY});
+    // const model = createModel('gpt-4.1');
 
     // Claude example
     // const createModel = createClaudeProvider({apiKey:
@@ -284,13 +322,14 @@ async function main() {
     // createModel('claude-sonnet-4-5-20250929');
 
     // Google example
-    // const createModel = createGoogleProvider(process.env.GOOGLE_API_KEY!);
-    // const model = createModel('gemini-2.5-pro');
+    const createModel = createGoogleProvider(process.env.GOOGLE_API_KEY!);
+    const model = createModel('gemini-3-pro-preview');
 
     // Uncomment the examples you want to run
     // await basicExample(model);
     // await toolCallingExample(model);
-    // await imageAnalysisExample(model);
+    await imageAnalysisExample(model);
+    // await videoAnalysisExample(model); // Google Gemini only
     // await stopSignalExample(model);
     // await streamingExample(model);
     // await forceStopToolExample(model);

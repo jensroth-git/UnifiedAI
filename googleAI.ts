@@ -1,9 +1,9 @@
-import {Content, FunctionCallingConfigMode, FunctionDeclaration, GenerateContentConfig, GoogleGenAI, HarmBlockThreshold, HarmCategory} from '@google/genai';
+import {Content, FunctionCall, FunctionCallingConfigMode, FunctionDeclaration, GenerateContentConfig, GoogleGenAI, HarmBlockThreshold, HarmCategory, Part} from '@google/genai';
 
-import {BaseAudioMessage, BaseImageMessage, BaseMessage, BaseModel, BaseTextMessage, BaseTool, BaseToolCall, BaseToolOptions, BaseToolResponse, GenerateTextOptions, generateTextReturn} from './AIBase';
+import {BaseAudioMessage, BaseImageMessage, BaseMessage, BaseModel, BaseTextMessage, BaseTool, BaseToolCall, BaseToolOptions, BaseToolResponse, BaseVideoMessage, GenerateTextOptions, generateTextReturn} from './AIBase';
 
-export type GoogleGenerativeAIModelId =
-    'gemini-2.5-pro'|'gemini-2.5-flash'|'gemini-2.5-flash-lite-preview-06-17';
+export type GoogleGenerativeAIModelId = 'gemini-3-pro-preview'|'gemini-2.5-pro'|
+    'gemini-2.5-flash'|'gemini-2.5-flash-lite-preview-06-17';
 
 export type GoogleSafetySettings = Array < {category: string
     threshold: string
@@ -95,6 +95,20 @@ export type GoogleSafetySettings = Array < {category: string
                 }
               }]
             });
+          } else if (
+              (message as BaseVideoMessage).content &&
+              (message as BaseVideoMessage).content[0].type == 'video_url') {
+            googleMessages.push({
+              role: message.role == 'user' ? 'user' : 'model',
+              parts: [{
+                inlineData: {
+                  mimeType: (message as BaseVideoMessage)
+                                .content[0]
+                                .video_url.mime_type,
+                  data: (message as BaseVideoMessage).content[0].video_url.data
+                }
+              }]
+            });
           } else if ((message as BaseToolCall).functionCall) {
             googleMessages.push({
               role: 'model',
@@ -127,16 +141,21 @@ export type GoogleSafetySettings = Array < {category: string
         }
       }
 
-      convertMessagesFromGoogle(toolCallIDs: Map<any, string>, messages: any[]):
+      convertMessagesFromGoogle(toolCallIDs: Map<any, string>, messages: Content[]):
           BaseMessage[] {
         let baseMessages: BaseMessage[] = [];
 
         for (let message of messages) {
+          if (!message.parts) {
+            continue;
+          }
+
           // check if text property exists
           if (message.parts[0].text) {
             baseMessages.push({
               role: message.role == 'user' ? 'user' : 'assistant',
-              text: message.parts[0].text
+              text: message.parts[0].text,
+              thoughtSignature: message.parts[0].thoughtSignature
             });
           }
           // check if function call property exists
@@ -145,9 +164,10 @@ export type GoogleSafetySettings = Array < {category: string
               role: 'assistant',
               functionCall: {
                 id: toolCallIDs.get(message) || '',
-                name: message.parts[0].functionCall.name,
+                name: message.parts[0].functionCall.name || '',
                 args: message.parts[0].functionCall.args
-              }
+              },
+              thoughtSignature: message.parts[0].thoughtSignature
             });
           }
           // check if function response
@@ -500,31 +520,36 @@ export type GoogleSafetySettings = Array < {category: string
                 contents.push(content);
 
                 // Process all parts in the response
-                let textParts: string[] = [];
-                let functionCalls: any[] = [];
+                let textParts: Part[] = [];
+                let functionCalls: Part[] = [];
 
                 if (content.parts) {
                   for (const part of content.parts) {
                     if (part.text) {
-                      textParts.push(part.text);
+                      textParts.push(part);
                     } else if (part.functionCall) {
-                      functionCalls.push(part.functionCall);
+                      functionCalls.push(part);
                     }
                   }
                 }
 
                 // Handle text parts
                 if (textParts.length > 0) {
-                  const fullText = textParts.join('');
-                  console.log(fullText);
+                  const fullText = textParts.map(part => part.text).join('');
+                  //console.log(fullText);
 
                   if (options.textMessageGenerated) {
                     await options.textMessageGenerated(
                         {role: 'assistant', text: fullText});
                   }
 
+                  // we should never have more than one text part
+                  if (textParts.length > 1) {
+                    console.warn('More than one text part found in response thought signature dropped');
+                  }
+
                   addedMessages.push(
-                      {role: 'model', parts: [{text: fullText}]});
+                      {role: 'model', parts: [{text: fullText, thoughtSignature: textParts[0].thoughtSignature}]});
                 }
 
                 // Handle function calls
@@ -536,10 +561,10 @@ export type GoogleSafetySettings = Array < {category: string
                     let toolCallMessage = {
                       role: 'model',
                       parts:
-                          [{functionCall: {name: call.name, args: call.args}}]
-                    }
+                          [{functionCall: {name: call.functionCall?.name, args: call.functionCall?.args, thoughtSignature: call.thoughtSignature}}]
+                    };
 
-                                          addedMessages.push(toolCallMessage);
+                    addedMessages.push(toolCallMessage);
 
                     // generate toolCallID
                     let id = this.generateToolCallID();
@@ -550,9 +575,9 @@ export type GoogleSafetySettings = Array < {category: string
                     const toolOptions: BaseToolOptions = {forceStop: false};
 
                     // check if tool exists
-                    if (call.name && options.tools?.[call.name]) {
-                      toolResponse = await options.tools[call.name].execute(
-                          call.args, toolOptions);
+                    if (call.functionCall?.name && options.tools?.[call.functionCall?.name]) {
+                      toolResponse = await options.tools[call.functionCall?.name].execute(
+                          call.functionCall?.args, toolOptions);
                     }
 
                     if (toolOptions.forceStop) {
@@ -563,14 +588,13 @@ export type GoogleSafetySettings = Array < {category: string
                       role: 'function',
                       parts: [{
                         functionResponse: {
-                          name: call.name,
-                          response: {name: call.name, content: toolResponse}
+                          name: call.functionCall?.name,
+                          response: {name: call.functionCall?.name, content: toolResponse}
                         }
                       }]
-                    }
+                    };
 
-                                              functionCallIDs.set(
-                                                  toolResponseMessage, id);
+                    functionCallIDs.set(toolResponseMessage, id);
 
                     addedMessages.push(toolResponseMessage);
                     contents.push(toolResponseMessage);

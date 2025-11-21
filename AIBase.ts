@@ -48,7 +48,8 @@ export type BaseSystemMessage = {
 
 export type BaseTextMessage = {
     role: "user" | "assistant",
-    text: string
+    text: string,
+    thoughtSignature?: string
 };
 
 export type BaseImageMessage = {
@@ -73,13 +74,25 @@ export type BaseAudioMessage = {
     }[]
 };
 
+export type BaseVideoMessage = {
+    role: "user",
+    content: {
+        type: "video_url",
+        video_url: {
+            mime_type: string,
+            data: string
+        }
+    }[]
+};
+
 export type BaseToolCall = {
     role: "assistant",
     functionCall: {
         id: string,
         name: string,
         args: any
-    }
+    },
+    thoughtSignature?: string
 };
 
 export type BaseToolResponse = {
@@ -91,7 +104,7 @@ export type BaseToolResponse = {
     }
 };
 
-export type BaseMessage = BaseSystemMessage | BaseTextMessage | BaseImageMessage | BaseAudioMessage | BaseToolCall | BaseToolResponse;
+export type BaseMessage = BaseSystemMessage | BaseTextMessage | BaseImageMessage | BaseAudioMessage | BaseVideoMessage | BaseToolCall | BaseToolResponse;
 
 export type BaseToolOptions = {
     forceStop?: boolean

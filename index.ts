@@ -6,6 +6,7 @@ export {
     BaseTextMessage,
     BaseImageMessage,
     BaseAudioMessage,
+    BaseVideoMessage,
     BaseToolCall,
     BaseToolResponse,
     BaseTool,
