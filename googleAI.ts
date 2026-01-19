@@ -2,8 +2,14 @@ import {Content, FunctionCall, FunctionCallingConfigMode, FunctionDeclaration, G
 
 import {BaseAudioMessage, BaseImageMessage, BaseMessage, BaseModel, BaseTextMessage, BaseTool, BaseToolCall, BaseToolOptions, BaseToolResponse, BaseVideoMessage, GenerateTextOptions, generateTextReturn} from './AIBase';
 
-export type GoogleGenerativeAIModelId = 'gemini-3-pro-preview'|'gemini-2.5-pro'|
-    'gemini-2.5-flash'|'gemini-2.5-flash-lite-preview-06-17';
+export type GoogleGenerativeAIModelId = 
+// Gemini 3 models
+'gemini-3-pro-preview' | 'gemini-3-flash-preview' |
+// Gemini 2.5 models
+'gemini-2.5-pro'|'gemini-2.5-flash'|'gemini-2.5-flash-lite-preview-06-17' |
+// Other models
+(string & {});
+
 
 export type GoogleSafetySettings = Array < {category: string
     threshold: string
