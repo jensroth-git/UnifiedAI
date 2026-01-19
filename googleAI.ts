@@ -1,6 +1,7 @@
 import {Content, FunctionCall, FunctionCallingConfigMode, FunctionDeclaration, GenerateContentConfig, GoogleGenAI, HarmBlockThreshold, HarmCategory, Part} from '@google/genai';
 
 import {BaseAudioMessage, BaseImageMessage, BaseMessage, BaseModel, BaseTextMessage, BaseTool, BaseToolCall, BaseToolOptions, BaseToolResponse, BaseVideoMessage, GenerateTextOptions, generateTextReturn} from './AIBase';
+import {runWithTimeoutAndRetry} from './timeout-utils';
 
 export type GoogleGenerativeAIModelId = 
 // Gemini 3 models
@@ -440,6 +441,51 @@ export type GoogleSafetySettings = Array < {category: string
         return 'call_' + result;
       }
 
+      isRetryableError(error: unknown): boolean {
+        if (!error || typeof error !== 'object') {
+          return false;
+        }
+
+        const errorDetails = error as {
+          status?: number|string,
+          statusCode?: number|string,
+          code?: string|number,
+          message?: string,
+          name?: string
+        };
+
+        if (errorDetails.name === 'TimeoutError') {
+          return true;
+        }
+
+        const statusValue = errorDetails.status ?? errorDetails.statusCode;
+        const status = typeof statusValue === 'string' ?
+            Number.parseInt(statusValue, 10) :
+            statusValue;
+
+        if (typeof status === 'number' &&
+            [408, 429, 500, 502, 503, 504].includes(status)) {
+          return true;
+        }
+
+        if (typeof errorDetails.code === 'string' &&
+            ['ETIMEDOUT', 'ECONNRESET', 'EAI_AGAIN', 'ECONNREFUSED', 'ENOTFOUND',
+             'ECONNABORTED']
+                .includes(errorDetails.code)) {
+          return true;
+        }
+
+        if (typeof errorDetails.message === 'string') {
+          const message = errorDetails.message.toLowerCase();
+          if (message.includes('timeout') || message.includes('timed out') ||
+              message.includes('rate limit')) {
+            return true;
+          }
+        }
+
+        return false;
+      }
+
       override async generateText(options: GenerateTextOptions):
           Promise<generateTextReturn> {
         let roundtrips = 0;
@@ -512,8 +558,11 @@ export type GoogleSafetySettings = Array < {category: string
 
           try {
             // Use new API: provider.models.generateContent()
-            const response = await this.provider.models.generateContent(
-                {model: this.modelID, contents: contents, config: config});
+            const response = await runWithTimeoutAndRetry(
+                () => this.provider.models.generateContent(
+                    {model: this.modelID, contents: contents, config: config}),
+                options.timeoutOptions,
+                (error) => this.isRetryableError(error));
 
             // Process response from the new API structure
             if (response.candidates && response.candidates[0] &&

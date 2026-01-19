@@ -2,6 +2,7 @@ import {Anthropic} from '@anthropic-ai/sdk';
 import {z} from 'zod';
 
 import {BaseImageMessage, BaseMessage, BaseModel, BaseSystemMessage, BaseTextMessage, BaseTool, BaseToolCall, BaseToolOptions, BaseToolResponse, GenerateTextOptions, generateTextReturn} from './AIBase';
+import {runWithTimeoutAndRetry} from './timeout-utils';
 
 export type ClaudeModelId = Anthropic.Model|'claude-sonnet-4-5-20250929'|
                             'claude-haiku-4-5-20251001'|
@@ -524,6 +525,88 @@ export class ClaudeModel extends BaseModel {
     }
   }
 
+  isRetryableError(error: unknown): boolean {
+    if (!error || typeof error !== 'object') {
+      return false;
+    }
+
+    const errorDetails = error as {
+      status?: number|string,
+      statusCode?: number|string,
+      code?: string|number,
+      message?: string,
+      name?: string
+    };
+
+    if (errorDetails.name === 'TimeoutError') {
+      return true;
+    }
+
+    const statusValue = errorDetails.status ?? errorDetails.statusCode;
+    const status = typeof statusValue === 'string' ?
+        Number.parseInt(statusValue, 10) :
+        statusValue;
+
+    if (typeof status === 'number' &&
+        [408, 429, 500, 502, 503, 504].includes(status)) {
+      return true;
+    }
+
+    if (typeof errorDetails.code === 'string' &&
+        ['ETIMEDOUT', 'ECONNRESET', 'EAI_AGAIN', 'ECONNREFUSED', 'ENOTFOUND',
+         'ECONNABORTED']
+            .includes(errorDetails.code)) {
+      return true;
+    }
+
+    if (typeof errorDetails.message === 'string') {
+      const message = errorDetails.message.toLowerCase();
+      if (message.includes('timeout') || message.includes('timed out') ||
+          message.includes('rate limit')) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  getRetryDelayMs(error: unknown): number|undefined {
+    if (!error || typeof error !== 'object') {
+      return undefined;
+    }
+
+    const errorDetails = error as {
+      status?: number|string,
+      statusCode?: number|string,
+      headers?: Record<string, string>
+    };
+
+    const statusValue = errorDetails.status ?? errorDetails.statusCode;
+    const status = typeof statusValue === 'string' ?
+        Number.parseInt(statusValue, 10) :
+        statusValue;
+
+    if (status !== 429) {
+      return undefined;
+    }
+
+    this.updateRateLimitInfo(errorDetails.headers);
+
+    const retryAfter = errorDetails.headers?.['retry-after'];
+    if (!retryAfter) {
+      return undefined;
+    }
+
+    const parsed = Number.parseInt(retryAfter, 10);
+    if (Number.isNaN(parsed) || parsed <= 0) {
+      return undefined;
+    }
+
+    const waitTime = parsed * 1000;
+    console.log(`Rate limit hit. Waiting ${waitTime / 1000} seconds before retry.`);
+    return waitTime;
+  }
+
   override async generateText(options: GenerateTextOptions):
       Promise<generateTextReturn> {
     let addedMessages: Anthropic.Messages.MessageParam[] = [];
@@ -567,70 +650,28 @@ export class ClaudeModel extends BaseModel {
           break;
         }
 
-        // Call Claude API with retry mechanism for rate limits
-        let response: Anthropic.Messages.Message|undefined;
-        const maxRetries = 3;
-        let retryCount = 0;
-        let retryDelay = 2000;  // Start with 2 seconds
-
-        while (retryCount <= maxRetries) {
-          try {
-            response = await this.provider.messages.create({
+        const response = await runWithTimeoutAndRetry(
+            () => this.provider.messages.create({
               model: this.modelID,
               messages: claudeMessages,
               max_tokens: this.maxTokens || 4096,
               tools: claudeTools,
               tool_choice: options.toolChoice == 'required' ? {type: 'any'} :
                                                               {type: 'auto'}
-            });
+            }),
+            {
+              RequestTimeoutMS: options.timeoutOptions?.RequestTimeoutMS,
+              MaxRetries: options.timeoutOptions?.MaxRetries ?? 3,
+              RetryDelayMS: options.timeoutOptions?.RetryDelayMS ?? 2000,
+              RetryBackoffFactor: options.timeoutOptions?.RetryBackoffFactor ?? 2
+            },
+            (error) => this.isRetryableError(error),
+            (error) => this.getRetryDelayMs(error));
 
-            // Update rate limit info from successful response
-            if (response.usage?.input_tokens) {
-              // Adjust remaining tokens based on actual usage
-              ClaudeModel.rateLimitInfo.remainingTokens -=
-                  response.usage.input_tokens;
-            }
-
-            // Success, break out of retry loop
-            break;
-          } catch (error: any) {
-            // Check if this is a rate limit error
-            if (error.status === 429) {
-              // Update rate limit info from error response headers
-              this.updateRateLimitInfo(error.headers);
-
-              retryCount++;
-
-              // If we've reached max retries, throw the error
-              if (retryCount > maxRetries) {
-                throw error;
-              }
-
-              // Get retry-after header or use exponential backoff
-              let waitTime = error.headers?.['retry-after'] ?
-                  parseInt(error.headers['retry-after']) * 1000 :
-                  retryDelay;
-
-              console.log(`Rate limit hit. Waiting ${
-                  waitTime /
-                  1000} seconds before retry ${retryCount}/${maxRetries}`);
-
-              // Wait for the specified time
-              await new Promise(resolve => setTimeout(resolve, waitTime));
-
-              // Exponential backoff for next retry if needed
-              retryDelay *= 2;
-            } else {
-              // Not a rate limit error, throw it
-              throw error;
-            }
-          }
-        }
-
-        // If after all retries we still don't have a response, throw an error
-        if (!response) {
-          throw new Error(
-              'Failed to get response from Claude API after multiple retries');
+        // Update rate limit info from successful response
+        if (response.usage?.input_tokens) {
+          // Adjust remaining tokens based on actual usage
+          ClaudeModel.rateLimitInfo.remainingTokens -= response.usage.input_tokens;
         }
 
         const cleanedResponse: Anthropic.Messages.MessageParam = {

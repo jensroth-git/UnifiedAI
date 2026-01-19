@@ -2,6 +2,7 @@ import OpenAI from 'openai';
 import {ChatCompletionAssistantMessageParam, ChatCompletionMessageFunctionToolCall, ChatCompletionMessageToolCall, ChatCompletionToolMessageParam, ChatModel} from 'openai/resources';
 
 import {BaseImageMessage, BaseMessage, BaseModel, BaseSystemMessage, BaseTextMessage, BaseTool, BaseToolCall, BaseToolOptions, BaseToolResponse, GenerateTextOptions, generateTextReturn} from './AIBase';
+import {runWithTimeoutAndRetry} from './timeout-utils';
 
 export type OpenAIModelId = ChatModel|(string&{})
 
@@ -337,6 +338,51 @@ export class OpenAIModel extends BaseModel {
     }
   }
 
+  isRetryableError(error: unknown): boolean {
+    if (!error || typeof error !== 'object') {
+      return false;
+    }
+
+    const errorDetails = error as {
+      status?: number|string,
+      statusCode?: number|string,
+      code?: string|number,
+      message?: string,
+      name?: string
+    };
+
+    if (errorDetails.name === 'TimeoutError') {
+      return true;
+    }
+
+    const statusValue = errorDetails.status ?? errorDetails.statusCode;
+    const status = typeof statusValue === 'string' ?
+        Number.parseInt(statusValue, 10) :
+        statusValue;
+
+    if (typeof status === 'number' &&
+        [408, 429, 500, 502, 503, 504].includes(status)) {
+      return true;
+    }
+
+    if (typeof errorDetails.code === 'string' &&
+        ['ETIMEDOUT', 'ECONNRESET', 'EAI_AGAIN', 'ECONNREFUSED', 'ENOTFOUND',
+         'ECONNABORTED']
+            .includes(errorDetails.code)) {
+      return true;
+    }
+
+    if (typeof errorDetails.message === 'string') {
+      const message = errorDetails.message.toLowerCase();
+      if (message.includes('timeout') || message.includes('timed out') ||
+          message.includes('rate limit')) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   override async generateText(options: GenerateTextOptions):
       Promise<generateTextReturn> {
     let roundtrips = 0;
@@ -377,12 +423,15 @@ export class OpenAIModel extends BaseModel {
         break;
       }
 
-      const response = await this.provider.chat.completions.create({
-        messages: openAIMessages,
-        model: this.modelID,
-        tools: openAItools,
-        tool_choice: options.toolChoice
-      });
+      const response = await runWithTimeoutAndRetry(
+          () => this.provider.chat.completions.create({
+            messages: openAIMessages,
+            model: this.modelID,
+            tools: openAItools,
+            tool_choice: options.toolChoice
+          }),
+          options.timeoutOptions,
+          (error) => this.isRetryableError(error));
 
       let message = response.choices[0].message;
 

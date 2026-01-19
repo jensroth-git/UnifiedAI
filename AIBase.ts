@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { TimeoutOptions as TimeoutOptionsType, RetryNotification } from "./timeout-utils";
 
 export class Signal {
     constructor(private _value: boolean = false) 
@@ -116,14 +117,17 @@ export type BaseTool = {
     execute: (args: any, options: BaseToolOptions) => any,
 }
 
+export type TimeoutOptions = TimeoutOptionsType;
+export type { RetryNotification };
+
 export type GenerateTextOptions = {
     model: BaseModel,
     messages?: BaseMessage[],
     maxToolRoundtrips?: number,
     tools?: Record<string, BaseTool>,
     toolChoice?: "auto" | "none" | "required",
-    thinking?: boolean,
     stopSignal?: Signal,
+    timeoutOptions?: TimeoutOptions,
     textMessageGenerated?: (message: BaseTextMessage) => Promise<void>
 }
 
