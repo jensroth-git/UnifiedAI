@@ -54,7 +54,7 @@ export type BaseTextMessage = {
 };
 
 export type BaseImageMessage = {
-    role: "user",
+    role: "user" | "assistant",
     content: {
         type: "image_url",
         image_url: {

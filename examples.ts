@@ -7,6 +7,7 @@
 import 'dotenv/config';
 
 import {z} from 'zod';
+import fs from 'fs';
 
 import {BaseImageMessage, BaseMessage, BaseModel, BaseTool, BaseVideoMessage, createClaudeProvider, createGoogleProvider, createOpenAIProvider, generateText, Signal} from './index';
 
@@ -299,6 +300,24 @@ async function conversationHistoryExample(model: BaseModel) {
 }
 
 // ============================================
+// Example 9: Image Generation (Google Gemini 3 Pro Image Preview only)
+// ============================================
+
+async function imageGenerationExample(model: BaseModel) {
+  console.log('\n=== Image Generation Example ===\n');
+
+  const result = await generateText({model, messages: [{role: 'user', text: 'Generate an image of a cat.'}]});
+
+  //extract the image url from the added messages
+  const imageMessage = (result.addedMessages[0] as BaseImageMessage);
+  console.log('Image URL:', imageMessage.content[0].image_url.url);
+
+  //save base64 url to file
+  const imageBase64 = imageMessage.content[0].image_url.url.split(',')[1];
+  fs.writeFileSync('image.jpg', Buffer.from(imageBase64, 'base64'));
+}
+
+// ============================================
 // Main execution
 // ============================================
 
@@ -319,7 +338,7 @@ async function main() {
     // Claude example
     // const createModel = createClaudeProvider({apiKey:
     // process.env.ANTHROPIC_API_KEY}); const model =
-    // createModel('claude-sonnet-4-5-20250929');
+    // createModel('claude-opus-4-6');
 
     // Google example
     // const createModel = createGoogleProvider(process.env.GOOGLE_API_KEY!);
@@ -328,12 +347,13 @@ async function main() {
     // Uncomment the examples you want to run
     // await basicExample(model);
     // await toolCallingExample(model);
-    await imageAnalysisExample(model);
+    // await imageAnalysisExample(model);
     // await videoAnalysisExample(model); // Google Gemini only
     // await stopSignalExample(model);
     // await streamingExample(model);
     // await forceStopToolExample(model);
     // await conversationHistoryExample(model);
+    // await imageGenerationExample(model);
 
     console.log('\nUncomment examples in the main() function to run them.');
   } catch (error) {

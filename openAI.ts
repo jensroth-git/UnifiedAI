@@ -41,8 +41,9 @@ export class OpenAIModel extends BaseModel {
           content: (message as BaseTextMessage).text
         });
       } else if ((message as BaseImageMessage).content) {
+        //convert google generated images to user messages for openAI 
         openAImessages.push({
-          role: (message as BaseImageMessage).role,
+          role: 'user',
           content: (message as BaseImageMessage).content
         });
       } else if ((message as BaseToolCall).functionCall) {

@@ -4,9 +4,7 @@ import {z} from 'zod';
 import {BaseImageMessage, BaseMessage, BaseModel, BaseSystemMessage, BaseTextMessage, BaseTool, BaseToolCall, BaseToolOptions, BaseToolResponse, GenerateTextOptions, generateTextReturn} from './AIBase';
 import {runWithTimeoutAndRetry} from './timeout-utils';
 
-export type ClaudeModelId = Anthropic.Model|'claude-sonnet-4-5-20250929'|
-                            'claude-haiku-4-5-20251001'|
-                            'claude-opus-4-5-20251101'|(string&{});
+export type ClaudeModelId = Anthropic.Model|(string&{});
 
 // Define interfaces to match Anthropic SDK's structure
 interface AnthropicToolUse {
@@ -243,6 +241,9 @@ export class ClaudeModel extends BaseModel {
           const toolCall = (message as BaseToolCall).functionCall;
           const toolUseContent: Anthropic.Messages.ContentBlock[] = [{
             type: 'tool_use',
+            caller: {
+              type: 'direct'
+            },
             id: toolCall.id,
             name: toolCall.name,
             input: toolCall.args

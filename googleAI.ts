@@ -3,13 +3,14 @@ import {Content, FunctionCall, FunctionCallingConfigMode, FunctionDeclaration, G
 import {BaseAudioMessage, BaseImageMessage, BaseMessage, BaseModel, BaseTextMessage, BaseTool, BaseToolCall, BaseToolOptions, BaseToolResponse, BaseVideoMessage, GenerateTextOptions, generateTextReturn} from './AIBase';
 import {runWithTimeoutAndRetry} from './timeout-utils';
 
-export type GoogleGenerativeAIModelId = 
-// Gemini 3 models
-'gemini-3-pro-preview' | 'gemini-3-flash-preview' |
-// Gemini 2.5 models
-'gemini-2.5-pro'|'gemini-2.5-flash'|'gemini-2.5-flash-lite-preview-06-17' |
-// Other models
-(string & {});
+export type GoogleGenerativeAIModelId =
+    // Gemini 3 models
+    'gemini-3.1-pro-preview'|'gemini-3-pro-preview'|'gemini-3-flash-preview'|
+    'gemini-3-pro-image-preview'|
+    // Gemini 2.5 models
+    'gemini-2.5-pro'|'gemini-2.5-flash'|'gemini-2.5-flash-lite-preview-06-17'|
+    // Other models
+    (string&{});
 
 
 export type GoogleSafetySettings = Array < {category: string
@@ -148,8 +149,8 @@ export type GoogleSafetySettings = Array < {category: string
         }
       }
 
-      convertMessagesFromGoogle(toolCallIDs: Map<any, string>, messages: Content[]):
-          BaseMessage[] {
+      convertMessagesFromGoogle(
+          toolCallIDs: Map<any, string>, messages: Content[]): BaseMessage[] {
         let baseMessages: BaseMessage[] = [];
 
         for (let message of messages) {
@@ -162,6 +163,22 @@ export type GoogleSafetySettings = Array < {category: string
             baseMessages.push({
               role: message.role == 'user' ? 'user' : 'assistant',
               text: message.parts[0].text,
+              thoughtSignature: message.parts[0].thoughtSignature
+            });
+          }
+          // check for generated images (Gemini 3.1 Pro Image Preview)
+          else if(message.parts[0].inlineData) {
+            const url = `data:${message.parts[0].inlineData.mimeType};base64,${message.parts[0].inlineData.data}`;
+
+            baseMessages.push({
+              role: 'assistant',
+              content: [{
+                type: 'image_url',
+                image_url: {
+                  url: url,
+                  detail: 'auto'
+                }
+              }],
               thoughtSignature: message.parts[0].thoughtSignature
             });
           }
@@ -447,9 +464,9 @@ export type GoogleSafetySettings = Array < {category: string
         }
 
         const errorDetails = error as {
-          status?: number|string,
-          statusCode?: number|string,
-          code?: string|number,
+          status?: number | string,
+          statusCode?: number | string,
+          code?: string | number,
           message?: string,
           name?: string
         };
@@ -468,10 +485,10 @@ export type GoogleSafetySettings = Array < {category: string
           return true;
         }
 
-        if (typeof errorDetails.code === 'string' &&
-            ['ETIMEDOUT', 'ECONNRESET', 'EAI_AGAIN', 'ECONNREFUSED', 'ENOTFOUND',
-             'ECONNABORTED']
-                .includes(errorDetails.code)) {
+        if (typeof errorDetails.code === 'string' && [
+              'ETIMEDOUT', 'ECONNRESET', 'EAI_AGAIN', 'ECONNREFUSED',
+              'ENOTFOUND', 'ECONNABORTED'
+            ].includes(errorDetails.code)) {
           return true;
         }
 
@@ -577,6 +594,7 @@ export type GoogleSafetySettings = Array < {category: string
                 // Process all parts in the response
                 let textParts: Part[] = [];
                 let functionCalls: Part[] = [];
+                let imageParts: Part[] = [];
 
                 if (content.parts) {
                   for (const part of content.parts) {
@@ -584,6 +602,8 @@ export type GoogleSafetySettings = Array < {category: string
                       textParts.push(part);
                     } else if (part.functionCall) {
                       functionCalls.push(part);
+                    } else if (part.inlineData) {
+                      imageParts.push(part);
                     }
                   }
                 }
@@ -591,7 +611,7 @@ export type GoogleSafetySettings = Array < {category: string
                 // Handle text parts
                 if (textParts.length > 0) {
                   const fullText = textParts.map(part => part.text).join('');
-                  //console.log(fullText);
+                  // console.log(fullText);
 
                   if (options.textMessageGenerated) {
                     await options.textMessageGenerated(
@@ -600,11 +620,30 @@ export type GoogleSafetySettings = Array < {category: string
 
                   // we should never have more than one text part
                   if (textParts.length > 1) {
-                    console.warn('More than one text part found in response thought signature dropped');
+                    console.warn(
+                        'More than one text part found in response thought signature dropped');
                   }
 
-                  addedMessages.push(
-                      {role: 'model', parts: [{text: fullText, thoughtSignature: textParts[0].thoughtSignature}]});
+                  addedMessages.push({
+                    role: 'model',
+                    parts: [{
+                      text: fullText,
+                      thoughtSignature: textParts[0].thoughtSignature,
+                    }]
+                  });
+                }
+
+                // Handle image parts
+                if (imageParts.length > 0) {
+                  for (const part of imageParts) {
+                    addedMessages.push({
+                      role: 'model',
+                      parts: [{
+                        inlineData: part.inlineData,
+                        thoughtSignature: part.thoughtSignature,
+                      }]
+                    });
+                  }
                 }
 
                 // Handle function calls
@@ -615,8 +654,13 @@ export type GoogleSafetySettings = Array < {category: string
                     // add tool call to added messages
                     let toolCallMessage = {
                       role: 'model',
-                      parts:
-                          [{functionCall: {name: call.functionCall?.name, args: call.functionCall?.args, thoughtSignature: call.thoughtSignature}}]
+                      parts: [{
+                        functionCall: {
+                          name: call.functionCall?.name,
+                          args: call.functionCall?.args,
+                          thoughtSignature: call.thoughtSignature,
+                        }
+                      }]
                     };
 
                     addedMessages.push(toolCallMessage);
@@ -627,12 +671,16 @@ export type GoogleSafetySettings = Array < {category: string
 
                     let toolResponse = null;
 
-                    const toolOptions: BaseToolOptions = {forceStop: false};
+                    const toolOptions: BaseToolOptions = {
+                      forceStop: false,
+                    };
 
                     // check if tool exists
-                    if (call.functionCall?.name && options.tools?.[call.functionCall?.name]) {
-                      toolResponse = await options.tools[call.functionCall?.name].execute(
-                          call.functionCall?.args, toolOptions);
+                    if (call.functionCall?.name &&
+                        options.tools?.[call.functionCall?.name]) {
+                      toolResponse =
+                          await options.tools[call.functionCall?.name].execute(
+                              call.functionCall?.args, toolOptions);
                     }
 
                     if (toolOptions.forceStop) {
@@ -644,7 +692,10 @@ export type GoogleSafetySettings = Array < {category: string
                       parts: [{
                         functionResponse: {
                           name: call.functionCall?.name,
-                          response: {name: call.functionCall?.name, content: toolResponse}
+                          response: {
+                            name: call.functionCall?.name,
+                            content: toolResponse,
+                          }
                         }
                       }]
                     };
